@@ -1,0 +1,342 @@
+    ::-webkit-scrollbar {
+      width: 0px;/*对垂直流动条有效*/
+      height: 0px;/*对水平流动条有效*/
+    }
+@font-face {
+	font-family: Gotham;
+	src: url(Gotham/Gotham-Book.otf);
+}
+body {
+    padding: 0;
+    margin: 0;
+    font-family: "Gotham", Helvetica, Arial, Sans-serif;
+    background-color: #dcdcdc;
+}
+#hsxMovieStackPage {
+	border: 0px none;
+	margin-left: 0;
+	margin-top: -161px;
+	height: 1200px;
+	width: 970px;
+	margin-bottom: -135px;
+}
+a {
+	text-decoration: none !important;
+}
+a:link { color: #359ab6;}
+a:visited { color: #359ab6;}
+a:hover { color: #73a82f;}
+a:active { color: #73a82f;}
+.wrapper {
+	width: 970px;
+	margin: 0 auto;
+}
+#header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	margin: 0;
+	z-index: 1000;
+}	
+#menu {
+	background-color: #b5d888;
+}
+#menu ul {
+	color: #fff;
+	font-size: 0.8em;
+	list-style-type: none;
+	position: relative;
+	height: 50px;
+	float: center;
+	margin: 0 auto;
+	padding: 0;	
+}
+#menu li {
+	display: inline;
+	padding: 0 10px;
+	height: 50px;
+	float: left;
+}
+#menu li .hover {
+	background-color: #73a82f;
+}
+#menu span {
+	color: #fff;
+	padding: 0 10px;
+	line-height: 50px;
+	vertical-align: middle;
+}
+#menu img {
+	padding: 0 10px;
+	vertical-align: middle;
+}
+#nav {
+	display: inline;
+}
+#nav .button{
+	width: 273px;
+	height: 53px;
+	background-color: #fff;
+	float: right;
+	margin-left: 15px;
+	padding: 0 10px;
+	white-space:nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+#nav img {
+	padding: 13px 10px 12px;
+
+}
+#nav span {
+	color: #939da3;
+	padding: 0 5px;
+	line-height: 53px;
+	font-size: 11px;
+	vertical-align: middle;
+}
+#nav span.highlight {
+	color: #359ab6;
+}
+#movieStockList {
+	width: 100%;
+	height: 360px;
+	background-color: #fff;
+	display: none;
+}
+#movieStockList .table_container {
+	width: 282px;
+	height: 226px;
+	padding-right: 40px;
+	margin: 0 auto;
+	position:relative;
+	float: left;
+}
+#movieStockList table {
+	width: 100%;
+	float: left;
+	table-layout: fixed;
+}
+#movieStockList .col0{
+	width: 165px;
+}
+#movieStockList .col1{
+	width: 55px;
+}
+#movieStockList th {
+	text-align: left;
+	color: #939da3;
+	background-color: #eaeaea;
+}
+#movieStockList td {
+	color: #359ab6;
+	border-bottom: 1px solid #e2e2e2;
+	white-space:nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+#movieStockList th, #movieStockList td {
+	font-size: 11px; 
+	padding: 10px 15px;
+	height: 25px;
+}
+.botnav {
+	clear: both;
+	width: 970px;
+	height: 50px;
+	margin: 270px auto 0 auto;
+}
+.botnav ul {
+	margin: auto;
+	list-style: none;
+}
+.botnav ul li {
+	display: inline-block;
+	float: left;
+	margin: 0 10px 0 10px;
+}
+.disabled a {
+	color: #73a82f;
+}
+#content {
+	margin: 50px auto;
+	padding: 20px 0;
+	position: relative;
+	float:center;
+}
+#cast, #trends {
+	background-color:white;
+	overflow: hidden;
+	padding: 12px;
+	border-radius: 2px;
+	margin-bottom: 20px;
+}
+#scatterPlot {
+	float:left;
+}
+#actors {
+	position: relative;
+	width: 450px;
+	height: 230px;
+	margin: 30px 0 0 0;
+	float:left;
+	overflow-y: scroll;
+	background: #F7F7F7;
+}
+.separator-container {
+	width: 100%;
+    margin: 0 auto 10px;
+    overflow: visible;
+    text-align: left;
+    position: relative;
+}
+.separator-line{
+	height: 1px;
+	width: 80%;
+	position: absolute;
+    top: 50%;
+	background-color: #e2e2e2;
+	right: 0;
+}
+#cast .separator-line {
+	width: 800px;
+}
+#trends .separator-line {
+	width: 830px;
+}
+.separator span, .separator p {
+	display: inline-block; 
+	background-color: white;
+}
+#filter, #filtertrend {
+	position: absolute;
+	margin: 5px 0;
+	float: right;
+	top: 50%;
+	right: 0;
+	font-size: 11px;
+	color: #939da3;
+}
+#filter, #filtertrend ul {
+	list-style-type: none;
+}
+#filtertrend li {
+	display: inline;
+	padding: 5px 10px;
+
+}
+#filtertrend .selected {
+	color: #73a82f;
+	border-top: 1px solid #fff;
+	border-bottom: 1px solid #e2e2e2;
+	border-left: 1px solid #e2e2e2;
+	border-right: 1px solid #e2e2e2;
+	background-color: white;
+}
+#filter li {
+	display: inline;
+	padding: 5px 10px;
+
+}
+#filter .selected {
+	color: #73a82f;
+	border-top: 1px solid #fff;
+	border-bottom: 1px solid #e2e2e2;
+	border-left: 1px solid #e2e2e2;
+	border-right: 1px solid #e2e2e2;
+	background-color: white;
+}
+h6, span {
+	line-height: 13px;
+	font-size: 13px;
+	padding: 20px 0;
+	margin: 0;
+	color: #939da3;
+}
+text {
+    font-size: 11px;
+}
+.index text, #reference text {
+	fill: #c6c6c6; 
+	font-size: 9px; 
+	font-weight: bold;
+}
+.index.y-axis text {
+	text-anchor: end;
+}
+.index.x-axis text {
+	text-anchor: middle;
+}
+.index.x-axis rect {
+	fill:#f7f7f7;
+}
+.index line {
+	stroke: #e3e3e3;
+	stroke-width: 1;
+}
+.celebrities circle, .celebrities polygon {
+	fill: #a3dcef;
+	stroke: #49bfe1;
+	stroke-width: 1;
+}
+.celebrities line {
+	stroke: #c3cad4;
+	stroke-width: 2;
+}
+.celebrities .hover line, .celebrities .clicked line {
+	stroke: #5cc266;
+}
+.celebrities .hover circle, .celebrities .hover polygon, .celebrities .clicked circle, .celebrities .clicked polygon  {
+	fill:#bfe58c;
+	stroke:#5cc266;
+}
+.cowork circle, .cowork polygon {
+	fill: rgba(190, 229, 140, 0.7);
+	stroke: rgba(87, 193, 104, 0.7);
+}
+#reference line {
+	stroke: #5cc266;
+	stroke-width: 1;
+	stroke-dasharray: 3, 1;		
+}
+#reference.cowork line{
+	stroke: rgba(87, 193, 104, 0.7);
+	stroke-width: 2;
+	stroke-dasharray: none;
+}
+#reference.cowork text {
+	fill: #73a82f;
+}
+#reference text {
+	fill: #eee;
+}
+#reference rect {
+	fill: #939da3;
+}
+#reference .highlight {
+	fill: #73a534;
+}
+.legend circle, .legend polygon {
+	fill: #d6d7d8;
+	stroke: #c2c5c6;
+	stroke-width: 1;
+}
+.legend .works circle{
+	fill: white;
+}
+.legend .nodata line {
+	stroke: #c2c5c6;
+	stroke-width: 2;
+	stroke-dasharray: none;	
+}
+.legend line {
+	stroke: #c6c6c6;
+	stroke-width: 1;
+	stroke-dasharray: 1, 2;	
+}
+.legend text {
+	fill: #c6c6c6; 
+	font-size: 9px; 
+	font-weight: bold;
+}

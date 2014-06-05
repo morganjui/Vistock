@@ -1,0 +1,1248 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+<head>
+<title>Vistock</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+<div id="header">
+  <div id="menu">
+    <div class="wrapper">
+      <ul>
+        <li id="btn_movieStockList"><a href="#"><img src="icon_menu.png"><span>Movie Stock List</span><span>▾</span></a></li>
+      </ul>
+    </div>
+  </div>
+  <div id="movieStockList">
+    <div class="wrapper">
+      <h6>MOVIE LIST</h6>
+    </div>
+    <div class="botnav">
+    </div>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div id="content">
+    <div style="overflow: hidden; margin: 20px auto; border-radius: 5px; ">
+      <iframe id="hsxMovieStackPage"></iframe>
+    </div>
+    <div id="cast">
+      <div class="separator-container">
+        <span>CAST VISUALIZATION</span>
+        <div class="separator-line"></div>
+        <ul id="filter">
+          <li class="selected">All</li>
+        </ul>
+      </div>
+
+      <div id="scatterPlot"></div>
+      <div id="actors"></div>
+    </div>
+    <div id="trends">
+      <div class="separator-container">
+        <span>GOOGLE TRENDS</span>
+        <div class="separator-line"></div>
+        <ul id="filtertrend">
+          <li class="selected">Movie</li>
+          <li>Cast</li>
+        </ul>
+      </div>
+      <div id="trend">
+        <script type="text/javascript" src="//www.google.com/trends/embed.js?hl=en-US&q=aaa&date=today+12-m&cmpt=q&content=1&cid=TIMESERIES_GRAPH_0&export=5&w=945&h=330"></script>      
+      </div>
+    </div>
+    <div id="nav">
+      <a class="button" href="#">
+        <img src="btn_next.png" style="float:right"><span>Next Movie</span><span id="next" class="highlight"></span>
+      </a>
+      <a class="button" href="#">
+        <img src="btn_previous.png" style="float:left"><span>Previous Movie</span><span id="previous" class="highlight"></span>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.11.0.min.js"></script>
+<link href="css/no-theme/jquery-ui-1.10.4.custom.css" rel="stylesheet">
+<script src="js/jquery-1.10.2.js"></script>
+<script src="js/jquery-ui-1.10.4.custom.js"></script>
+<script src="jquery.bootpag.min.js"></script>
+
+<script>
+var celebrities;
+var ipoList;
+var ipoSymbols; // keys of ipoList
+var casts = [], casts_hsx = [], casts_cowork = [];
+var relatedGenres = [];
+var selectedGenre = "All";
+var sp_style = { // style settings of Scatter Plot svg (more style settings in the drawScatterPlot() function)
+  chartWidth:390, 
+  chartHeight: 200,
+  legendHeight: 25,
+  paddingBottom: 20,
+  paddingRight: 50,
+  textOffset: 8,
+  labelPadding: 3,
+  paddingLeft: 50,
+  paddingTop: 50,
+};
+var cl_style = { // style settings of Cast List svg
+  width: 435,
+  height: 500,
+};
+var STATUS = {
+  SHOWSIDE: 0, 
+  SHOWDETAIL: 1,
+  TOGGLE: 2,
+  UPDATE: 3,
+}
+var cl_cache = {
+  datatemp: 0,
+  state: STATUS.SHOWSIDE,
+} 
+
+var movieStockSymbol = GetURLParameter("symbol");
+document.getElementById('hsxMovieStackPage').src = "http://www.hsx.com/security/view/" + movieStockSymbol;
+
+var q = queue(); // read data from json files
+q.defer(function(callback){
+  d3.json("final_result.json", function(error, json) {
+    if (error) return console.warn(error);
+    celebrities = json;
+    callback(null, error);
+  })
+});
+
+q.defer(function(callback){
+  d3.json("ipo_lists.json", function(error, json){
+    if (error) return console.warn(error);
+    ipoList = json;
+    callback(null, error);
+  })
+});
+
+q.await(ready);
+
+function ready(err, results) {
+  console.log(ipoList);
+  console.log(celebrities);
+
+  var keytemp = [];
+  for (keys in ipoList){
+    keytemp.push(keys);
+  }
+  var arraytemp = jQuery.inArray(movieStockSymbol,keytemp);
+
+  $('.botnav').bootpag({
+     total: 86,
+     page: Math.floor(arraytemp/17) + 1,
+     maxVisible: 20 
+  }).on('page', function(event, num){
+     removeTable();
+     drawMovieStockList(0+(num-1)*17, 17+(num-1)*17);
+  });
+
+
+
+  document.title = "Vistock - " + ipoList[movieStockSymbol].name;
+  generateFilter(movieStockSymbol);
+  ipoSymbols = Object.keys(ipoList);
+  setButtons();
+  getCasts(movieStockSymbol, 10); //get casts from movieStock
+  calculateCoworkExperience();
+  drawScatterPlot(); // visualize the scatterplot with casts
+  drawCastList(STATUS.SHOWSIDE);
+  drawMovieStockList(0+Math.floor(arraytemp/17)*17, 17+Math.floor(arraytemp/17)*17);
+  googleTrend(ipoList[movieStockSymbol].name, casts);
+}
+
+function setButtons(){
+  var index = ipoSymbols.indexOf(movieStockSymbol);
+  if ( index <= 0){
+    $("#previous").parent(".button").hide();
+  } else {
+    $("#previous").text(ipoList[ipoSymbols[index - 1]].name);
+    $("#previous").parent(".button").attr("href", "index.html?symbol=" + ipoSymbols[index - 1]);
+  }
+  if ( index >= ipoSymbols.length){
+    $("#next").parent(".button").hide();
+  } else {
+    $("#next").text(ipoList[ipoSymbols[index + 1]].name);
+    $("#next").parent(".button").attr("href", "index.html?symbol=" + ipoSymbols[index + 1]);
+  }
+}
+
+function googleTrend(movie, actors){
+  var alist = []
+  for (i = 0; i<actors.length; i++){
+    alist.push(actors[i][0]);
+  }
+
+  $('#trend iframe').attr('src', "//www.google.com/trends/fetchComponent?hl=en-US&q=" + movie + "&date=today+12-m&cmpt=q&content=1&cid=TIMESERIES_GRAPH_0&export=5&w=945&h=330");
+  $("#filtertrend").children().click(function(){
+    $("#filtertrend").children().removeClass("selected");
+    $(this).addClass("selected");
+    if ($(this).text() == "Movie") {
+      $('#trend iframe').attr('src', "//www.google.com/trends/fetchComponent?hl=en-US&q=" + movie + "&date=today+12-m&cmpt=q&content=1&cid=TIMESERIES_GRAPH_0&export=5&w=945&h=330");
+    }
+    else if ($(this).text() == "Cast") {
+      $('#trend iframe').attr('src', "//www.google.com/trends/fetchComponent?hl=en-US&q=" + alist + "&date=today+12-m&cmpt=q&content=1&cid=TIMESERIES_GRAPH_0&export=5&w=945&h=330");
+    }
+  });
+}
+
+function removeTable(){
+  $('.table_container').remove();
+}
+
+function getCasts(movieStock, maxNumberOfCast){
+  var castNames = "";
+  if (ipoList[movieStock] != null){
+    castNames = ipoList[movieStock].casts;
+  }
+  var i = 0;
+  casts = [];
+  casts_hsx = [];
+  casts_cowork = [];
+  Object.keys(castNames).forEach(function(name){
+    for (var k in celebrities){
+      if (celebrities[k][0] == name){
+        casts.push(celebrities[k]);
+        casts_hsx.push(ipoList[movieStock].casts[name]);
+        casts_cowork.push([]);
+        if (++i >= 10){
+          return casts;
+        }
+        break;
+      }
+    }
+  });
+
+  return casts;
+}
+
+function calculateCoworkExperience(){
+  for (var i = 0; i < casts.length; i ++){
+    for (var j = 3; j < casts[i].length - 4; j ++){
+      for (var m = 0; m < casts.length; m ++){
+        if (m == i) continue;
+        for (var n = 3; n < casts[m].length - 4; n ++){
+          if (casts[i][j].title == casts[m][n].title){
+            if (casts_cowork[i].indexOf(m) < 0){
+              casts_cowork[i].push(m);
+            }
+          }
+        }
+      }
+    }
+  }
+  return casts_cowork;
+}
+
+function generateFilter(movieStock){
+  if (ipoList[movieStock] != null){
+    relatedGenres = ipoList[movieStock].genres;
+  }
+  
+  var filter = document.getElementById("filter");
+
+  relatedGenres.forEach(function(d){ 
+    var newLi = document.createElement('li');
+    newLi.innerHTML = d;
+    filter.appendChild(newLi);
+  });
+
+  $("#filter").children().click(function(){
+    $("#filter").children().removeClass("selected");
+    $(this).addClass("selected");
+    selectedGenre = $(this).text();
+    
+    var selectedName = null;
+    if (!d3.select(".clicked").empty()) selectedName = d3.select(".clicked").data()[0][0];
+    drawScatterPlot(); // visualize the scatterplot with casts
+    drawCastList(STATUS.UPDATE);
+    if (selectedName != null) drawReference(d3.selectAll("#celebrity").filter(function(d){ return d[0] == selectedName;}));
+  });
+}
+
+function drawCastList(status, data){
+  d3.select("#actors").select("svg").remove();
+  if (casts.length <= 0){
+    return;
+  }
+  var svg = d3.select("#actors").append("svg")
+              .attr("width", cl_style.width)
+              .attr("height", cl_style.height);
+
+  if (status != null){
+    if (status == STATUS.TOGGLE){
+      if (cl_cache.state == STATUS.SHOWDETAIL & cl_cache.datatemp == data){
+        cl_cache.state = STATUS.SHOWSIDE;
+      } else {
+        cl_cache.state = STATUS.SHOWDETAIL;
+        cl_cache.datatemp = data;
+      }
+    } else if (status == STATUS.UPDATE){
+      // do nothing
+    }
+    else {
+      cl_cache.state = status;
+      if (status == STATUS.SHOWDETAIL) {
+        cl_cache.datatemp = data;
+      }
+    }
+
+  }
+
+  // draw the Casl List area depends on the cl_cache status
+  if (cl_cache.state == STATUS.SHOWSIDE){
+    svg.attr("height", 230);
+    drawSide(svg, casts); // visualize the scatterplot with casts
+  }
+  else if (cl_cache.state == STATUS.SHOWDETAIL){
+    drawDetails(svg, cl_cache.datatemp);
+  }
+}
+
+function drawDetails(svg, aid){
+  //background
+  svg.append("g")
+  .append("rect")
+  .attr("x",0)
+  .attr("y",0)
+  .attr("width",240)
+  .attr("height",500)
+  .style("fill","white");
+
+  //rating
+  var rating = [];
+  var dict = aid[aid.length-1];
+  for (var key in dict){
+   if (dict[key] != 0 && key!="All" ){
+    rating.push([key, dict[key]]);
+    rating.sort(function(a, b) { return b[1] - a[1];});
+   }
+  }  
+  
+  //bar chart
+  svg.append("g")
+    .selectAll("rect")
+    .data(rating.slice(0,5)).enter()
+    .append("rect")
+    .attr("x",100)
+    .attr("y",function(d,i){return i*25+150})
+    .attr("width", 130)
+    .attr("height", 15)
+    .style("fill","#D6D7D8");
+
+  svg.append("g")
+    .selectAll("rect")
+    .data(rating.slice(0,5)).enter()
+    .append("rect")
+    .attr("x",100)
+    .attr("y",function(d,i){return i*25+150})
+    .attr("width", function(d,i){return d[1]*13})
+    .attr("height", 15)
+    .style("fill","#939DA3");
+
+  svg.append("g")
+    .selectAll("text")
+    .data(rating.slice(0,5)).enter()
+    .append("text")
+    .attr("x",105)
+    .attr("y",function(d,i){return i*25+160})
+    .text(function(d,i){return d[0] +" "+ d[1]})
+    .style("fill","white")
+    .style("font-size","9");
+
+  //pic
+  svg.append("g")
+    .append("image")
+    .attr("xlink:href",aid[2])
+    .attr("x",0)
+    .attr("y",20)
+    .attr("width",81)
+    .attr("height",111);
+
+  svg.append("g")
+    .append("image")
+    .attr("xlink:href","close.png")
+    .attr("x",400)
+    .attr("y",20)
+    .attr("width",25)
+    .attr("height",25)
+    .on("click",function(){
+      d3.selectAll("#celebrity").classed("clicked", false);
+      clearReference();
+      drawCastList(STATUS.SHOWSIDE);
+    })
+    .on("mouseover", function(){
+      d3.select(this).attr("xlink:href","close_2.png");
+    })
+    .on("mouseout", function(){
+      d3.select(this).attr("xlink:href","close.png");
+    });
+
+  
+  //name
+  svg.append("g")
+    .append("text")
+    .attr("x",100)
+    .attr("y",30)
+    .text(aid[0])
+    .attr("font-size",11)
+    .attr("fill","#73A82F");
+    
+  var label = ["H$","Ratings","Box office"];
+  var values = [aid[aid.length-4],aid[aid.length-1][selectedGenre],aid[aid.length-3]];
+  
+  //labels
+  svg.append("g")
+    .selectAll("text")
+    .data(label).enter()
+    .append("text")
+    .attr("x",100)
+    .attr("y",function(d,i){ return 30*i+70; })
+    .text(function(d,i){ return d; })
+    .attr("fill","#61686B");
+  
+  //values
+  svg.append("g")
+    .selectAll("text")
+    .data(values).enter()
+    .append("text")
+    .attr("x",170)
+    .attr("y",function(d,i){ return 30*i+70; })
+    .text(function(d,i){ return d; })
+    .attr("fill","#61686B");
+
+  //movies
+  var movies = [];
+  for (i=3; i<=aid.length-5; i++){
+    movies.push(aid[i]);
+  }
+
+  var selectedmovies = [];
+  if (selectedGenre != "All"){
+    for (i in movies){
+      if ($.inArray(selectedGenre, movies[i]["genre"]) == 1){
+        selectedmovies.push(movies[i]);
+      }
+    }
+  }
+  else {
+    selectedmovies = movies;
+  }
+
+  svg.append("g")
+  .selectAll("text")
+  .data(selectedmovies)
+  .enter()
+  .append("text")
+  .attr("x",260)
+  .attr("y",function(d,i){return 20*i+70})
+  .text(function(d,i){return d["time"]});
+
+  svg.append("g")
+  .selectAll("a")
+  .data(selectedmovies)
+  .enter()
+  .append("a")
+  .attr("xlink:href", function(d,i){ return "https://www.google.com/#q=" + d["name"]; })
+  .attr("target", "_blank")
+  .append("text")
+  .attr("x",310)
+  .attr("y",function(d,i){ return 20*i+70; })
+  .text(function(d,i){ 
+    if (d["name"].length <= 16){
+      return d["name"]; 
+    }
+    else {
+      return d["name"].slice(0,15) + "...";
+    }
+  })
+  .attr("fill","#359AB6");
+}
+
+function drawSide(svg, mid){
+  if(mid.length <= 5){
+    drawSideMin(svg,mid);
+  }
+  else {
+    drawSideMax(svg,mid);
+  }
+}
+
+function drawSideMin(svg, mid){
+  svg.append("g")
+     .append("rect")
+     .attr("x",25)
+     .attr("y",10)
+     .attr("width",405)
+     .attr("height",210)
+     .style("fill","#1E3235")
+     
+  svg.append("g")
+      .selectAll("image")
+      .data(mid)
+      .enter()
+      .append("image")
+      .attr("xlink:href",function(d,i){ return mid[i][2];})
+      .attr("x",function(d,i){ return i*81+25;})
+      .attr("y",35)
+      .attr("width",81)
+      .attr("height",111)
+      .attr("opacity",1);
+
+  svg.append("g")
+      .selectAll("text")
+      .data(mid)
+      .enter().append("text")
+      .attr("x",function(d,i){ return i*81+32;})
+      .attr("y",165)
+      .attr("width",81)
+      .attr("height",111)
+      .attr("font-size",11)
+      .attr("fill","white")
+      .attr("font-family","Gotham")
+      .selectAll("tspan")
+      .data(function(d,i){ return (splitStr(mid[i][0])); })
+      .enter().append("tspan")
+      .text(function(d,i){ return d; })
+      .attr("dy",function(d,i){ return i * 15;})
+      .attr("x",function(d,i){ return (d3.select(this.parentNode).attr("x"));});
+
+  svg.append("g")
+      .selectAll("rect")
+      .data(mid)
+      .enter().append("rect")
+      .attr("x",function(d,i){return i*81+25})
+      .attr("y",10)
+      .attr("width",81)
+      .attr("height",210)
+      .attr("fill","#AEC0C4")
+      .style({opacity:'0.7'})
+      .on("mouseover", function(d,i) {
+        var temphover = d3.select(this);
+        var selection = d3.select(".celebrities").selectAll("#celebrity").filter(function(d,i){ if(d[0] == temphover.data()[0][0]) return true; });
+        d3.select(this).style({opacity:'0'});
+        drawReference(selection); // show detail reference on the scatterplot
+      })
+      .on("mouseout", function(){
+        var temphover = d3.select(this);
+        var selection = d3.select(".celebrities").selectAll("#celebrity").filter(function(d,i){ if(d[0] == temphover.data()[0][0]) return true; });
+        d3.select(this).style({opacity:'0.7'});
+        clearReference(selection);
+      })
+      .on("click",function(d,i){ 
+        var tempclicked = d3.select(this);
+        var selection = d3.select(".celebrities").selectAll("#celebrity").filter(function(d,i){ if(d[0] == tempclicked.data()[0][0]) return true; });
+        toggleFocusedReference(selection);
+        drawCastList(STATUS.SHOWDETAIL, d);
+      });
+  var extra = []
+  for (i = 0; i< 5 - mid.length; i++){
+    extra[i] = 0;
+  }
+  svg.append("g")
+    .selectAll("rect")
+    .data(extra)
+    .enter().append("rect")
+    .attr("x",function(d,i){ return (mid.length+i)*81+25;})
+    .attr("y",10)
+    .attr("width",81)
+    .attr("height",210)
+    .attr("fill","#AEC0C4")
+    .style({opacity:'0.7'})
+}
+
+function drawSideMax(svg, mid){
+  var count = 0, count2 = 0, count3 = 0;
+  mid = mid.slice(0,10);
+  svg.append("g"); 
+  svg.append("g")
+      .selectAll("image")
+      .data(mid)
+      .enter()
+      .append("image")
+      .attr("xlink:href",function(d,i){return mid[i][2]; })
+      .attr("x",function(d,i){return ((i+1)%5)*81})
+      .attr("y",function(d,i){
+        if (!(i%5)) count = count+1;
+        return (count - 1) * 111;
+      })
+      .attr("width",81)
+      .attr("height",111)
+      .attr("opacity",1);
+  
+  svg.append("g")
+      .selectAll("text")
+      .data(mid)
+      .enter().append("text")
+      .attr("x",function(d,i){return ((i+1)%5)*81+5;})
+      .attr("y",function(d,i){
+        if (!(i%5)) count3 = count3+1;
+        return (count3-1)*111+90;
+      })
+      .attr("width",81)
+      .attr("height",111)
+      .attr("font-size",11)
+      .attr("fill","white")
+      .attr("font-family","Gotham")
+      .selectAll("tspan")
+      .data(function(d,i){ return (splitStr(mid[i][0]));})
+      .enter().append("tspan")
+      .text(function(d,i){ return d;})
+      .attr("dy",function(d,i){ return i * 15;})
+      .attr("x",function(d,i){ return (d3.select(this.parentNode).attr("x"));});
+  
+  svg.append("g")
+      .selectAll("rect")
+      .data(mid)
+      .enter().append("rect")
+      .attr("x",function(d,i){ return ((i+1)%5)*81; })
+      .attr("y",function(d,i){
+        if (!(i%5)) count2 = count2+1;
+        return (count2-1)*111;
+      })
+      .attr("width",81)
+      .attr("height",111)
+      .attr("fill","#AEC0C4")
+      .style({opacity:'0.7'})
+      .on("mouseover", function(d,i) {
+        var temphover = d3.select(this);
+        var selection = d3.select(".celebrities").selectAll("#celebrity").filter(function(d){ if(d[0] == temphover.data()[0][0]) return true; });
+        d3.select(this).style({opacity:'0'});
+        drawReference(selection); // show detail reference on the scatterplot
+      })
+      .on("mouseout", function(){
+        var temphover = d3.select(this);
+        console.log(temphover.data()[0][0]);
+        var selection = d3.select(".celebrities").selectAll("#celebrity").filter(function(d){ if(d[0] == temphover.data()[0][0]) return true; });
+        d3.select(this).style({opacity:'0.7'});
+        clearReference(selection);
+      })
+      .on("click",function(d,i){ 
+        var tempclicked = d3.select(this);
+        var selection = d3.select(".celebrities").selectAll("#celebrity").filter(function(d){ if(d[0] == tempclicked.data()[0][0]) return true; });
+        toggleFocusedReference(selection);
+        drawCastList(STATUS.SHOWDETAIL, d);
+      });
+  var extra = [];
+  for (i = 0; i< 10 - mid.length; i++){
+    extra[i] = 0;
+  }
+  svg.append("g")
+    .selectAll("rect")
+    .data(extra)
+    .enter().append("rect")
+    .attr("x",function(d,i){ return (mid.length+i)*81+25;})
+    .attr("y",10)
+    .attr("width",81)
+    .attr("height",210)
+    .attr("fill","#AEC0C4")
+    .style({opacity:'0.7'});
+}
+
+function splitStr(str){
+	var array = str.split(" ")
+	var newarray = []
+	newarray.push(array[0])
+	newarray.push(array[array.length-1])
+	return newarray
+}
+
+function drawScatterPlot(){
+  var showLegend_none = false;
+  var showLegend_connection = (selectedGenre == "All") ? true : false;
+
+  d3.select("#scatterPlot").select("svg").remove();
+
+  sp_style.paddingTop = parseInt(getCssProperty("actors", "margin-top"));
+  sp_style.canvasWidth = sp_style.chartWidth + sp_style.paddingLeft + sp_style.paddingRight;
+  sp_style.canvasHeight = sp_style.paddingTop + sp_style.chartHeight + sp_style.paddingBottom + sp_style.textOffset + sp_style.legendHeight;
+
+  if (casts.length <= 0){
+    return;
+  }
+
+  // prepare x scale
+  var min_Hvalue = Number.MAX_VALUE; // calculate min and max of H$ value
+  var max_Hvalue = -Number.MAX_VALUE;
+  casts.forEach(function(cast){ 
+    if (cast[cast.length - 4] > max_Hvalue){
+      max_Hvalue = cast[cast.length - 4];
+    }
+    if (cast[cast.length - 4] < min_Hvalue){
+      min_Hvalue = cast[cast.length - 4];
+    }
+  });
+  var xInterval = 5; // set the interval
+  var colNumbers = 5;
+  while ((max_Hvalue - min_Hvalue) / xInterval > colNumbers){
+    xInterval *= 2;
+  }
+  var max_Xaxis = Math.ceil(max_Hvalue / xInterval) * xInterval; // set the min and max value of x-axis
+  var min_Xaxis = Math.floor(min_Hvalue / xInterval) * xInterval; 
+  var isOdd = true;
+  while ((max_Xaxis - min_Xaxis) / xInterval != colNumbers){
+    if (isOdd && min_Xaxis - xInterval >= 0){
+      min_Xaxis -= xInterval;
+      isOdd = false;
+    }else {
+      max_Xaxis += xInterval;
+      isOdd = true;
+    }
+  }
+  // should calculate min and max based on all ratings in all genres
+  // prepare y scale
+  var min_Rvalue = Number.MAX_VALUE; // calculate min and max of rating value
+  var max_Rvalue = -Number.MAX_VALUE;
+  // casts.forEach(function(cast){ 
+  //   if (cast[cast.length - 1][selectedGenre] > max_Rvalue){
+  //     max_Rvalue = cast[cast.length - 1][selectedGenre];
+  //   }
+  //   if (cast[cast.length - 1][selectedGenre] < min_Rvalue){
+  //     min_Rvalue = cast[cast.length - 1][selectedGenre];
+  //   }
+  // });
+  relatedGenres.forEach(function(genre){
+      casts.forEach(function(cast){ 
+      if (cast[cast.length - 1][genre] > max_Rvalue){
+        max_Rvalue = cast[cast.length - 1][genre];
+      }
+      if (cast[cast.length - 1][genre] < min_Rvalue){
+        min_Rvalue = cast[cast.length - 1][genre];
+      }
+    });
+  });
+
+  var yInterval = 0.25; // set the interval
+  var rowNumbers = 5;
+  while ((max_Rvalue - min_Rvalue) / yInterval > rowNumbers){
+    yInterval *= 2;
+  }
+  var max_Yaxis = Math.ceil(max_Rvalue / yInterval) * yInterval; // set the min and max value of y-axis
+  var min_Yaxis = Math.floor(min_Rvalue / yInterval) * yInterval; 
+  var isOdd = true;
+  while ((max_Yaxis - min_Yaxis) / yInterval != rowNumbers){
+    if (isOdd && min_Yaxis - yInterval >= 0){
+      min_Yaxis -= yInterval;
+      isOdd = false;
+    }else {
+      max_Yaxis += yInterval;
+      isOdd = true;
+    }
+  }
+  var yScale = d3.scale.linear()  // build y-axis scale translater 
+                .domain([min_Yaxis, max_Yaxis])
+                .range([sp_style.paddingTop + sp_style.chartHeight, sp_style.paddingTop]);
+
+  var xScale = d3.scale.linear() // build x-axis scale translater
+                .domain([min_Xaxis, max_Xaxis])
+                .range([sp_style.paddingLeft, sp_style.paddingLeft + sp_style.chartWidth]);
+
+  // prepare radious scale
+  rScale = d3.scale.sqrt()
+            .domain([0, 150])
+            .range([0, 100]);
+
+
+  // initialize svg canvas
+  var svg = d3.select("#scatterPlot")
+              .append("svg")
+              .attr("width", sp_style.canvasWidth)
+              .attr("height", sp_style.canvasHeight);
+
+  d3.select("#scatterPlot").attr("style", "width:" + sp_style.canvasWidth + "; height:" + sp_style.canvasHeight);
+
+  // prepare the group tags
+  var xAxis = svg.append("g")
+                .attr("class", "index x-axis");
+  var yAxis = svg.append("g")
+                .attr("class", "index y-axis");  
+  var dotGroup = svg.append("g")
+                .attr("class", "celebrities");
+
+  // draw x axis
+  var xIndex = []
+  for (i = 0; i <= colNumbers; i++){
+    xIndex.push(min_Xaxis + i * xInterval);
+  }
+
+  xAxis.selectAll("rect") // draw the background bars
+      .data(xIndex.slice(1, xIndex.length))
+      .enter()
+      .append("rect")
+      .attr("x", function(d){ return xScale(d - xInterval / 2);})
+      .attr("y", sp_style.paddingTop)
+      .attr("width", function(d){ return xScale(d) - xScale(d - xInterval / 2);})
+      .attr("height", sp_style.chartHeight);
+  
+
+  xAxis.selectAll("text") // draw the index numbers
+      .data(xIndex)
+      .enter()
+      .append("text")
+      .text(function(d, i){ return (i == colNumbers) ? (d + " H$") : d;}) // draw the unit of x-axis in the last element
+      .attr("x", function(d){ return xScale(d);})
+      .attr("y", sp_style.chartHeight + sp_style.paddingTop + sp_style.textOffset)
+      .attr("style", "alignment-baseline: text-before-edge;");
+
+  // draw y axis
+  var yIndex = [];
+  for (i = 0; i <= rowNumbers; i ++){
+    yIndex.push(min_Yaxis + i * yInterval);
+  }
+
+  yAxis.selectAll("line") // draw the horizontal lines in the background
+      .data(yIndex)
+      .enter()
+      .append("line")
+      .attr("x1", sp_style.paddingLeft)
+      .attr("y1", function(d){ return yScale(d);})
+      .attr("x2", sp_style.paddingLeft + sp_style.chartWidth)
+      .attr("y2", function(d){ return yScale(d);});
+
+  yAxis.selectAll("text") // draw the index numbers
+      .data(yIndex)
+      .enter()
+      .append("text")
+      .text(function(d){ return d;})
+      .attr("x", sp_style.paddingLeft - sp_style.textOffset)
+      .attr("y", function(d){ return yScale(d);})
+      .attr("style", "alignment-baseline: middle");
+
+  yAxis.append('text') // draw the unit of y-axis
+    .text("Rating")
+    .attr("x", sp_style.paddingLeft - sp_style.textOffset)
+    .attr("y", function(d){ return yScale(max_Yaxis) - 16;});
+
+  // draw dots
+  dots = dotGroup.selectAll("g") // prepare group of each actor/director and define their interactions
+      .data(casts)
+      .enter()
+      .append("g")
+      .attr("id", "celebrity")
+      .on("mouseover", function(d){ 
+      	var temphover = d3.select(this);
+        d3.select("#actors").select("g:nth-child(4)").selectAll("rect").filter(function(d,i){ if (d[0] == temphover.data()[0][0]) return true; })
+          .style({opacity:"0"});
+        drawReference(d3.select(this)); // show detail reference on the scatterplot
+      })
+      .on("mouseout", function(d){
+        d3.select("#actors").select("g:nth-child(4)").selectAll("rect").style({opacity:"0.7"});
+        clearReference(d3.select(this)); // restore to the original view withough anything highlighted of the scatterplot
+      })
+      .on("click",function(d){
+        toggleFocusedReference(d3.select(this));
+        drawCastList(STATUS.TOGGLE, d);
+      });
+
+  // draw the glyph of cirle for actors and starts for directors
+  casts.forEach(function(d, i){
+    if (d[d.length - 2][selectedGenre] == 0){ // draw null glyph if no works in the selectedGenre
+      showLegend_none = true;
+      d3.select(dots[0][i]).append("line")
+            .attr("x1", function(){ return xScale(d[d.length - 4]) - rScale(8)/4;})
+            .attr("y1", function(){ return yScale(d[d.length - 1].All) - rScale(8)/4;})
+            .attr("x2", function(){ return xScale(d[d.length - 4]) + rScale(8)/4;})
+            .attr("y2", function(){ return yScale(d[d.length - 1].All) + rScale(8)/4;});
+      d3.select(dots[0][i]).append("line")
+            .attr("x1", function(){ return xScale(d[d.length - 4]) - rScale(8)/4;})
+            .attr("y1", function(){ return yScale(d[d.length - 1].All) + rScale(8)/4;})
+            .attr("x2", function(){ return xScale(d[d.length - 4]) + rScale(8)/4;})
+            .attr("y2", function(){ return yScale(d[d.length - 1].All) - rScale(8)/4;});
+    } else if (d[1] == "actor"){
+      d3.select(dots[0][i]).append("circle")
+          .attr("cx", function(){ return xScale(d[d.length - 4]);})
+          .attr("cy", function(){ return yScale(d[d.length - 1][selectedGenre]);})
+          .attr("r", function(){ return rScale(d[d.length - 2][selectedGenre])/2;})
+    } else if (d[1] == "director"){
+      d3.select(dots[0][i]).append("polygon")
+          .attr("points", function(){ return calculateStarPoints(xScale(d[d.length - 4]), yScale(d[d.length - 1][selectedGenre]), 5, rScale(d[d.length - 2][selectedGenre])/2, rScale(d[d.length - 2][selectedGenre])/4);})
+          .attr("cx", function(){ return xScale(d[d.length - 4]);})
+          .attr("cy", function(){ return yScale(d[d.length - 1][selectedGenre]);})
+          .attr("r", function(){ return rScale(d[d.length - 2][selectedGenre])/2;});
+    }
+  });
+
+  dots.sort(function(a, b){ return b[b.length - 2][selectedGenre] - a[a.length - 2][selectedGenre];}); // sort order from large to small
+
+  drawLegends(sp_style.paddingLeft, sp_style.paddingTop + sp_style.chartHeight + sp_style.paddingBottom + sp_style.textOffset, rScale, showLegend_none, showLegend_connection);
+}
+
+function toggleFocusedReference(selection){
+  d3.selectAll("#celebrity").classed("clicked", function(d){
+    if (this === selection[0][0]){
+      return (this.classList.contains("clicked"))? false : true;
+    }
+    return false;
+  });
+  if (selection.classed("clicked") && selection.selectAll("#reference").empty()){
+    drawReference(selection);
+  }
+  clearReference();
+}
+
+function drawReference(selection){
+  selection.classed("hover", true); // apply hover css style
+  var data = selection.data()[0];
+  var shape = null;
+  if (!selection.select("circle").empty()){
+    shape = "circle";
+  } else if (!selection.select("polygon").empty()){
+    shape = "polygon";
+  } else {
+    return;
+  }
+  var cx = parseFloat(selection.select(shape).attr("cx"));
+  var cy = parseFloat(selection.select(shape).attr("cy"));
+  var r = parseFloat(selection.select(shape).attr("r"));
+
+  if (selectedGenre == "All"){
+    var index;
+    for (index = 0; index < casts.length; index ++){
+      if (casts[index][0] == data[0]) break;
+    }
+    var coworkLines = d3.select(".celebrities").insert("g", ":first-child").attr("id", "reference").attr("class", "cowork");
+    var coworkNames = d3.select(".celebrities").append("g").attr("id", "reference").attr("class", "cowork");
+    coworkLines.selectAll("line")
+              .data(casts_cowork[index])
+              .enter()
+              .append("line")
+              .attr("x1", cx)
+              .attr("y1", cy)
+              .attr("x2", function(i){
+                var s = d3.selectAll("#celebrity")
+                          .filter(function(d){ return (d[0] == casts[i][0]);})
+                          .select((casts[i][0] == "director") ? "polygon" : "circle");
+                return s.empty() ? 0 : s.attr("cx");
+              })
+              .attr("y2", function(i){ 
+                var s = d3.selectAll("#celebrity")
+                          .filter(function(d){ return (d[0] == casts[i][0]);})
+                          .select((casts[i][0] == "director") ? "polygon" : "circle");
+                return s.empty() ? 0 : s.attr("cy");
+              });
+    d3.selectAll("#celebrity")
+        .filter(function(d) {
+            for (var i = 0; i < casts_cowork[index].length; i ++){
+              if (d[0] == casts[casts_cowork[index][i]][0]) return true;
+            }
+            return false;
+        })
+        .classed("cowork", true);
+    coworkNames.selectAll("text")
+                .data(casts_cowork[index])
+                .enter()
+                .append("text")
+                .text(function(i){ return casts[i][0];})
+                .attr("x", function(i){
+                  var s = d3.selectAll("#celebrity")
+                            .filter(function(d){ return (d[0] == casts[i][0]);})
+                            .select((casts[i][0] == "director") ? "polygon" : "circle");
+                  return s.empty() ? 0 : s.attr("cx");
+                })
+                .attr("y", function(i){ 
+                  var s = d3.selectAll("#celebrity")
+                            .filter(function(d){ return (d[0] == casts[i][0]);})
+                            .select((casts[i][0] == "director") ? "polygon" : "circle");
+                  return s.empty() ? 0 : s.attr("cy");
+                })
+                .attr("style", "text-anchor: middle; alignment-baseline:middle");
+  }
+
+  if (selection.select("#reference").empty()){ 
+    selection.moveToFront();
+    var detailLines = selection.insert("g", shape).attr("id", "reference"); // prepare group of detail elements "under" the hovered element
+    var detail = selection.append("g").attr("id", "reference"); // prepare group of detail elements "above" the hovered element
+    
+    detailLines.append("line") // draw horizontal reference line
+          .attr("x1", sp_style.paddingLeft)
+          .attr("y1", cy)
+          .attr("x2", cx)
+          .attr("y2", cy);
+    detailLines.append("line") // draw vertical reference line
+          .attr("x1", cx)
+          .attr("y1", sp_style.paddingTop)
+          .attr("x2", cx)
+          .attr("y2", sp_style.chartHeight + sp_style.paddingTop);
+
+    var text = detail.append("text") // draw rating figures
+          .text(data[data.length - 1][selectedGenre])
+          .attr("x", sp_style.paddingLeft - sp_style.textOffset)
+          .attr("y", cy)
+          .attr("style", "text-anchor: end; alignment-baseline:middle");
+    var bbox = text.node().getBBox();
+    detail.insert("rect", "text")
+          .attr("x", bbox.x - sp_style.labelPadding)
+          .attr("y", bbox.y - sp_style.labelPadding)
+          .attr("width", bbox.width + sp_style.labelPadding * 2)
+          .attr("height", bbox.height + sp_style.labelPadding * 2);
+    text = detail.append("text") // draw H$ figures
+                .text(data[data.length - 4])
+                .attr("x", cx)
+                .attr("y", sp_style.paddingTop + sp_style.chartHeight + sp_style.textOffset)
+                .attr("style", "text-anchor: middle; alignment-baseline:text-before-edge");
+    bbox = text.node().getBBox();
+    detail.insert("rect", "text")
+          .attr("x", bbox.x - sp_style.labelPadding)
+          .attr("y", bbox.y - sp_style.labelPadding)
+          .attr("width", bbox.width + sp_style.labelPadding * 2)
+          .attr("height", bbox.height + sp_style.labelPadding * 2);
+    text = detail.append("text") // draw celebrity's name
+                .text(data[0])
+                .attr("x", cx)
+                .attr("y", sp_style.paddingTop)
+                .attr("style", "text-anchor: middle; alignment-baseline:baseline");
+    text.attr("y", text.attr("y") - text.node().getBBox().height - sp_style.textOffset);
+    bbox = text.node().getBBox();
+    detail.insert("rect", "text")
+          .attr("x", bbox.x - sp_style.labelPadding)
+          .attr("y", bbox.y - sp_style.labelPadding)
+          .attr("width", bbox.width + sp_style.labelPadding * 2)
+          .attr("height", bbox.height + sp_style.labelPadding * 2)
+          .attr("class", "highlight");
+    detail.append("text") // draw number of works figures
+          .text(data[data.length - 2][selectedGenre])
+          .attr("x", function(e){ return (data[data.length - 2][selectedGenre] > 3) ? cx : (cx + r + 4);})
+          .attr("y", cy)
+          .attr("style", "text-anchor: middle; alignment-baseline:middle")
+          .attr("class", "highlight");
+  }
+}
+
+function clearReference(selection){
+  if (selection != null){
+    selection.classed("hover", false); // remove hover css style
+  }
+  
+  d3.selectAll(".cowork").filter(function(d){
+    return (d3.select(this).classed("sticky")) ? false : true;
+  }).classed("cowork", false);
+
+  if( !d3.selectAll("#reference").filter(function (d) {
+      return (d3.select(this.parentNode).classed("clicked") || d3.select(this.parentNode).classed("hover")) ? false : true; 
+    }).remove().empty()){
+      // restore order
+      d3.selectAll("#celebrity").sort(function(a, b){ return b[b.length - 2][selectedGenre] - a[a.length - 2][selectedGenre]; });
+      d3.select(".clicked").moveToFront();
+  }
+}
+
+d3.selection.prototype.moveToFront = function() {
+  return this.each(function(){
+    this.parentNode.appendChild(this);
+  });
+};
+
+function drawLegends(refX, refY, rScale, showLegend_none, showLegend_connection){
+  var minLegendWork = 4, maxLegendWork = 8;
+  var refR = rScale(maxLegendWork) / 2;
+  var textOffset = 5;
+  var legends = d3.select("#scatterplot").selectAll("svg").append("g")
+                    .attr("class", "legend");
+
+  // Number of Works
+  var works = legends.append("g").attr("class", "works");
+  works.append("circle")
+        .attr("cx", refX + refR)
+        .attr("cy", refY + refR)
+        .attr("r", refR)
+  works.append("circle")
+        .attr("cx", refX + refR)
+        .attr("cy", refY + rScale(minLegendWork)/2)
+        .attr("r", rScale(minLegendWork)/2)
+  works.append("line")
+      .attr("x1", refX + refR)
+      .attr("y1", refY + refR + textOffset)
+      .attr("x2", refX + refR * 2 + textOffset)
+      .attr("y2", refY + refR+ textOffset);
+  works.append("line")
+      .attr("x1", refX + refR)
+      .attr("y1", refY + rScale(minLegendWork)/2)
+      .attr("x2", refX + refR * 2 + textOffset)
+      .attr("y2", refY + rScale(minLegendWork)/2);
+  works.append("text")
+        .text(maxLegendWork)
+        .attr("x", refX + refR * 2 + textOffset)
+        .attr("y", refY + refR + textOffset)
+        .attr("style", "alignment-baseline:middle");
+  works.append("text")
+        .text(minLegendWork)
+        .attr("x", refX + refR * 2 + textOffset)
+        .attr("y", refY + rScale(minLegendWork)/2)
+        .attr("style", "alignment-baseline:middle");
+  var bbox = legends.node().getBBox();
+  works.append("text")
+        .text("Number of Works")
+        .attr("x", bbox.x + bbox.width + textOffset)
+        .attr("y", refY + refR)
+        .attr("style", "alignment-baseline:middle");
+
+  // Actor
+  var actor = legends.append("g");
+  var bbox = legends.node().getBBox();
+  actor.append("circle")
+        .attr("cx", bbox.x + bbox.width + textOffset + refR)
+        .attr("cy", refY + refR)
+        .attr("r", refR);
+  actor.append("text")
+        .text("Actor")
+        .attr("x", bbox.x + bbox.width + textOffset + refR * 2 + textOffset)
+        .attr("y", refY + refR)
+        .attr("style", "alignment-baseline:middle");
+
+  // Director
+  var director = legends.append("g");
+  var bbox = legends.node().getBBox();
+  director.append("polygon")
+          .attr("points", calculateStarPoints(bbox.x + bbox.width + textOffset + refR,
+                                              refY + refR, 
+                                              5, refR, refR/2));
+  director.append("text")
+        .text("Director")
+        .attr("x", bbox.x + bbox.width + textOffset + refR * 2 + textOffset)
+        .attr("y", refY + refR)
+        .attr("style", "alignment-baseline:middle");
+
+  if (showLegend_connection){
+    var r1 = 5, r2 = 6, dx = 8, dy = 5;
+    var noData = legends.append("g").attr("class", "nodata");
+    var bbox = legends.node().getBBox();
+    noData.append("line")
+          .attr("x1", bbox.x + bbox.width + textOffset + r1)
+          .attr("y1", refY + r1)
+          .attr("x2", bbox.x + bbox.width + textOffset + r1 + dx + r2)
+          .attr("y2", refY + r1 + dy + r2);
+    noData.append("circle")
+          .attr("cx", bbox.x + bbox.width + textOffset + r1)
+          .attr("cy", refY + r1)
+          .attr("r", r1);
+    noData.append("circle")
+          .attr("cx", bbox.x + bbox.width + textOffset + r1 + dx + r2)
+          .attr("cy", refY + r1 + dy + r2)
+          .attr("r", r2);
+    noData.append("text")
+          .text("Cowork Exp.")
+          .attr("x", bbox.x + bbox.width + textOffset + r1 + dx + r2*2 + textOffset)
+          .attr("y", refY + refR)
+          .attr("style", "alignment-baseline:middle");
+  }
+
+  // No data glyph
+  if (showLegend_none){
+    var noData = legends.append("g").attr("class", "nodata");
+    var bbox = legends.node().getBBox();
+    noData.append("line")
+          .attr("x1", bbox.x + bbox.width + textOffset)
+          .attr("y1", refY + textOffset)
+          .attr("x2", bbox.x + bbox.width + textOffset + refR)
+          .attr("y2", refY + textOffset + refR);
+    noData.append("line")
+          .attr("x1", bbox.x + bbox.width + textOffset)
+          .attr("y1", refY + textOffset + refR)
+          .attr("x2", bbox.x + bbox.width + textOffset + refR)
+          .attr("y2", refY + textOffset);
+    noData.append("text")
+          .text("None")
+          .attr("x", bbox.x + bbox.width + textOffset + refR + textOffset)
+          .attr("y", refY + refR)
+          .attr("style", "alignment-baseline:middle");    
+  }
+}
+
+function drawMovieStockList(start, end){
+  var numberOfRow = 6;
+  var numberOfTable = Math.ceil((end - start + 1) / numberOfRow);
+  for (var i = 0; i < numberOfTable; i ++){
+    var data = [];
+    for (var j = start + i * numberOfRow; j < start + (i + 1) * numberOfRow && j <= end; j ++){
+      data.push({NAME:ipoList[ipoSymbols[j]].name, SYMBOL:ipoSymbols[j]});
+    }
+    buildTable(data);
+  }
+}
+
+function buildTable(data){
+  var columns = ["NAME", "SYMBOL"];
+  var table = d3.select("#movieStockList .wrapper").append("div").attr("class", "table_container").append("table");
+  var thead = table.append("thead");
+  var tbody = table.append("tbody");
+  thead.append("tr")
+        .selectAll("th")
+        .data(columns)
+        .enter()
+        .append("th")
+        .text(function(d){ return d;})
+        .attr("class", function(d, i){ return "col" + i;});
+  var rows = tbody.selectAll("tr")
+                  .data(data)
+                  .enter()
+                  .append("tr");
+  var cells = rows.selectAll("td")
+                  .data(function(row){
+                    return columns.map(function(column){
+                      return {column: column, value: row[column], href: "index.html?symbol=" + row.SYMBOL};
+                    })
+                  })
+                  .enter()
+                  .append("td")
+                  .html(function(d){ return "<a href=\"" + d.href + "\">"+ d.value +"</a>";});
+
+}
+
+function calculateStarPoints(centerX, centerY, arms, outerRadius, innerRadius){ // source: https://gist.github.com/Dillie-O/4548290#file-gistfile1-js
+   var results = "";
+   var angle = Math.PI / arms;
+ 
+   for (var i = 0; i < 2 * arms; i++){
+      // Use outer or inner radius depending on what iteration we are in.
+      var r = (i & 1) == 0 ? outerRadius : innerRadius;
+      
+      var currX = centerX + Math.cos(i * angle) * r;
+      var currY = centerY + Math.sin(i * angle) * r;
+ 
+      // Our first time we simply append the coordinates, subsequet times
+      // we append a ", " to distinguish each coordinate pair.
+      if (i == 0){
+         results = currX + "," + currY;
+      }
+      else{
+         results += ", " + currX + "," + currY;
+      }
+   }
+ 
+   return results;
+}
+
+function getCssProperty(elmId, property){
+   var elem = document.getElementById(elmId);
+   return window.getComputedStyle(elem,null).getPropertyValue(property);
+}
+
+function GetURLParameter(sParam){ // source: http://www.jquerybyexample.net/2012/06/get-url-parameters-using-jquery.html
+  var sPageURL = window.location.search.substring(1);
+  var sURLVariables = sPageURL.split('&');
+  for (var i = 0; i < sURLVariables.length; i++) {
+    var sParameterName = sURLVariables[i].split('=');
+    if (sParameterName[0] == sParam){
+      return (sParameterName[1].substring(sParameterName[1].length - 1, sParameterName[1].length) == "/") ? sParameterName[1].substring(0, sParameterName[1].length - 1) : sParameterName[1];
+    }
+  }
+}
+
+$(document).ready(function(){
+  $("#btn_movieStockList").click(function(){
+    $("#movieStockList").toggle("blind", {}, 500);
+  });
+});
+
+</script>
+</body>
+</html>
